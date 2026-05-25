@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "WebChat - Talk to any webpage",
+  "version": "1.0.0",
+  "description": "Turn any documentation or article into an interactive AI assistant.",
+  "permissions": [
+    "sidePanel",     
+    "activeTab",     
+    "scripting"      
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "action": {
+    "default_title": "Open WebChat Sidebar"
+  }
+}
