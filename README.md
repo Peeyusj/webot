@@ -57,3 +57,4 @@ Your React app should now be loaded as a Chrome extension!
 ## Credit
 This template was initially made by [5tigerjelly](https://github.com/5tigerjelly/chrome-extension-react-template).
 
+<!-- https://en.wikipedia.org/wiki/2026_Iran_war -->

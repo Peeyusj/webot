@@ -4,9 +4,8 @@
   "version": "1.0.0",
   "description": "Turn any documentation or article into an interactive AI assistant.",
   "permissions": [
-    "sidePanel",     
-    "activeTab",     
-    "scripting"      
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -15,10 +14,13 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "side_panel": {
-    "default_path": "index.html"
-  },
   "action": {
-    "default_title": "Open WebChat Sidebar"
-  }
+    "default_title": "Toggle WebChat"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
 }
