@@ -1,44 +1,77 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { Readability } from '@mozilla/readability'; // Imported Mozilla Engine
 import App from './App';
 
-// Magic Vite trick: the '?inline' grabs all our Tailwind CSS as a raw string
-// so we can inject it safely inside the Shadow DOM!
 import tailwindCss from './index.css?inline'; 
 
 console.log("WebChat: Content Script Injected & Ready!");
 
-// 1. Create the container div that will float on the screen
+// --- THE DISCUSSSED HYBRID EXTRACTION ENGINE ---
+function extractPageContent(): { title: string; text: string; source: string } {
+  try {
+    // 1. Try Mozilla Readability First
+    // Clone the document so Readability doesn't mutate or break the live UI
+    const documentClone = document.cloneNode(true) as Document;
+    const reader = new Readability(documentClone, {
+      charThreshold: 200, // Minimum characters required to treat it as a valid article
+    });
+    
+    const article = reader.parse();
+
+    // Verify Readability found substantial content
+    if (article && article.textContent && article.textContent.trim().length > 300) {
+      return {
+        title: article.title || document.title,
+        text: article.textContent.trim(),
+        source: 'mozilla-readability'
+      };
+    }
+  } catch (error) {
+    console.warn("[WebChat] Readability failed, dropping to fallback chain:", error);
+  }
+
+  // 2. FALLBACK LAYER: Semantic-Cleaned innerText
+  // Runs if Readability returns null or the text chunk is too short
+  console.log("[WebChat] Using semantic fallback extraction.");
+  const clonedBody = document.body.cloneNode(true) as HTMLElement;
+  
+  // Strip out clutter tags that pollute LLM context
+  const noiseSelectors = 'nav, footer, header, aside, script, style, noscript, iframe, svg, [role="banner"], [role="navigation"]';
+  clonedBody.querySelectorAll(noiseSelectors).forEach(element => element.remove());
+
+  const fallbackText = clonedBody.innerText || clonedBody.textContent || "";
+
+  return {
+    title: document.title,
+    text: fallbackText.replace(/\s+/g, ' ').trim(), // Clean up chaotic spacing
+    source: 'vanilla-fallback'
+  };
+}
+
+// --- EXISTING UI SETUP ---
 const hostElement = document.createElement('div');
 hostElement.id = 'webchat-extension-root';
-
-// Keep it fixed to the top right of the screen so it floats over the website
 hostElement.style.position = 'fixed';
 hostElement.style.top = '0';
 hostElement.style.right = '0';
-hostElement.style.zIndex = '9999999'; // Ensure it's above all website navbars
+hostElement.style.zIndex = '9999999'; 
 document.body.appendChild(hostElement);
 
-// 2. Attach the bulletproof Shadow DOM to the container
 const shadowRoot = hostElement.attachShadow({ mode: 'open' });
 
-// 3. Inject our Tailwind CSS inside the Shadow DOM
 const styleElement = document.createElement('style');
 styleElement.textContent = tailwindCss;
 shadowRoot.appendChild(styleElement);
 
-// 4. Create the React Mount Point inside the Shadow DOM
 const reactRootElement = document.createElement('div');
 reactRootElement.id = 'react-root';
-
-// Start it with a width of 0px (Hidden)
 reactRootElement.style.height = '100vh';
 reactRootElement.style.width = '0px'; 
-reactRootElement.style.overflow = 'hidden'; // Hide content when closed
+reactRootElement.style.overflow = 'hidden'; 
 reactRootElement.style.transition = 'width 0.3s ease-in-out, box-shadow 0.3s ease-in-out';
 shadowRoot.appendChild(reactRootElement);
 
-// 5. Mount the React App
 const root = createRoot(reactRootElement);
 root.render(
   <React.StrictMode>
@@ -46,15 +79,27 @@ root.render(
   </React.StrictMode>
 );
 
-// 6. Listen for the background.js toggle command (when the user clicks the Chrome icon)
+// --- MESSAGING HANDSHAKE ---
 let isOpen = false;
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "TOGGLE_UI") {
     isOpen = !isOpen;
-    // Slide it open to 400px wide, or close it to 0px
+    
     reactRootElement.style.width = isOpen ? '400px' : '0px';
     reactRootElement.style.boxShadow = isOpen ? '-10px 0px 30px rgba(0,0,0,0.2)' : 'none';
-    sendResponse({ status: "Toggled", isOpen });
+    
+    let pageData = null;
+    if (isOpen) {
+      // Execute the exact hybrid pipeline on open
+      pageData = extractPageContent();
+      console.log(`[WebChat] Extracted via ${pageData.source}. Length: ${pageData.text.length} chars.`);
+    }
+
+    sendResponse({ 
+      status: "Toggled", 
+      isOpen,
+      pageData 
+    });
   }
   return true;
 });
