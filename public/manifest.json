@@ -3,13 +3,8 @@
   "name": "WebChat - Talk to any webpage",
   "version": "1.0.0",
   "description": "Turn any documentation or article into an interactive AI assistant.",
-  "permissions": [
-    "activeTab",
-    "scripting"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "permissions": ["activeTab", "scripting", "storage", "notifications"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

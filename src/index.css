@@ -1,5 +1,6 @@
 /* Import Tailwind's engine */
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* Define your global hex codes here */
 @theme {
