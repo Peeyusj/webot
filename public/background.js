@@ -1,9 +1,6 @@
 /* eslint-disable no-constant-condition */
 /* global chrome */
 
-// Stores page data extracted by content.tsx
-// Needed because INGEST_SINGLE_PAGE and INGEST_SITE_CONFIRMED
-// are sent AFTER the toggle, so we cache what content.tsx returned
 let cachedPageData = null;
 let cachedTabId = null;
 let cachedTabUrl = null;
@@ -18,72 +15,78 @@ chrome.action.onClicked.addListener(async (tab) => {
     const response = await chrome.tabs.sendMessage(tab.id, { action: "TOGGLE_UI" });
 
     if (response && response.isOpen && response.pageData) {
-      // Cache the extracted page data for later use
       cachedPageData = response.pageData;
       cachedTabId = tab.id;
       cachedTabUrl = tab.url;
-      console.log("[WebChat] Page data cached, waiting for mode selection.");
+      console.log("[WebChat] Page data cached.");
     }
 
     if (response && !response.isOpen) {
-      // Panel closed — clear cache
       cachedPageData = null;
       cachedTabId = null;
       cachedTabUrl = null;
     }
-
   } catch (err) {
     console.error("[WebChat] Toggle error:", err);
   }
 });
 
-
 // ============================================================
-// 2. MESSAGES FROM APP.TSX (mode selection + site confirmation)
+// 2. MESSAGES FROM APP.TSX
 // ============================================================
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
-  // --- SINGLE PAGE INGESTION ---
   if (message.action === "INGEST_SINGLE_PAGE") {
-    if (!cachedPageData || !cachedTabId || !cachedTabUrl) {
-      console.error("[WebChat] No cached page data for single page ingestion.");
-      return;
-    }
+    if (!cachedPageData || !cachedTabId || !cachedTabUrl) return;
     runSinglePageIngestion(cachedTabId, cachedTabUrl, cachedPageData);
     sendResponse({ ok: true });
     return true;
   }
 
-  // --- DISCOVER SITE (step 1 of full site flow) ---
   if (message.action === "DISCOVER_SITE") {
-    if (!cachedTabUrl || !cachedTabId) {
-      console.error("[WebChat] No cached tab URL for site discovery.");
-      return;
-    }
+    if (!cachedTabUrl || !cachedTabId) return;
     runSiteDiscovery(cachedTabId, cachedTabUrl);
     sendResponse({ ok: true });
     return true;
   }
 
-  // --- INGEST SITE CONFIRMED (step 2 of full site flow) ---
-  if (message.action === "INGEST_SITE_CONFIRMED") {
-    if (!cachedTabUrl || !cachedTabId) {
-      console.error("[WebChat] No cached tab URL for site ingestion.");
-      return;
-    }
-    runSiteIngestion(cachedTabId, cachedTabUrl);
+if (message.action === "INGEST_SITE_CONFIRMED") {
+    if (!cachedTabUrl || !cachedTabId) return;
+    // Pass the URLs array from the message into the runner
+    runSiteIngestion(cachedTabId, cachedTabUrl, message.urls); 
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.action === "CLEAR_CACHE") {
+    if (!cachedTabUrl || !cachedTabId) return;
+    runClearCache(cachedTabId, cachedTabUrl);
     sendResponse({ ok: true });
     return true;
   }
 });
 
+// ============================================================
+// RUNNERS
+// ============================================================
 
-// ============================================================
-// 3. SINGLE PAGE INGESTION RUNNER
-// ============================================================
+async function runClearCache(tabId, tabUrl) {
+  try {
+    const res = await fetch("http://localhost:8000/clear-cache", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: tabUrl, clear_all: false }),
+    });
+    
+    if (res.ok) {
+      chrome.tabs.sendMessage(tabId, { action: "CACHE_CLEARED" }).catch(() => {});
+    }
+  } catch (err) {
+    console.error("[WebChat] Cache clear error:", err);
+  }
+}
+
 async function runSinglePageIngestion(tabId, tabUrl, pageData) {
-  console.log("[WebChat] Starting single page ingestion:", tabUrl);
-
   try {
     const res = await fetch("http://localhost:8000/ingest-page", {
       method: "POST",
@@ -98,7 +101,6 @@ async function runSinglePageIngestion(tabId, tabUrl, pageData) {
     });
 
     await readSSEStream(res, (data) => {
-      // Forward every SSE event to the React UI
       chrome.tabs.sendMessage(tabId, {
         action: "INGESTION_PROGRESS",
         status: data.status,
@@ -106,24 +108,16 @@ async function runSinglePageIngestion(tabId, tabUrl, pageData) {
         elapsed: data.elapsed ?? null,
       }).catch(() => {});
     });
-
   } catch (err) {
-    console.error("[WebChat] Single page ingestion error:", err);
     chrome.tabs.sendMessage(tabId, {
       action: "INGESTION_PROGRESS",
       status: "failed",
-      message: `❌ Connection error: ${err.message}`,
+      message: `Connection error: ${err.message}`,
     }).catch(() => {});
   }
 }
 
-
-// ============================================================
-// 4. SITE DISCOVERY RUNNER
-// ============================================================
 async function runSiteDiscovery(tabId, tabUrl) {
-  console.log("[WebChat] Discovering pages for:", tabUrl);
-
   try {
     const res = await fetch("http://localhost:8000/discover-site", {
       method: "POST",
@@ -131,20 +125,15 @@ async function runSiteDiscovery(tabId, tabUrl) {
       body: JSON.stringify({ url: tabUrl }),
     });
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const result = await res.json();
 
-    // Send discovery result to App.tsx for confirmation dialog
     chrome.tabs.sendMessage(tabId, {
       action: "DISCOVER_RESULT",
       result,
     }).catch(() => {});
 
   } catch (err) {
-    console.error("[WebChat] Discovery error:", err);
     chrome.tabs.sendMessage(tabId, {
       action: "DISCOVER_RESULT",
       error: `Discovery failed: ${err.message}`,
@@ -152,13 +141,7 @@ async function runSiteDiscovery(tabId, tabUrl) {
   }
 }
 
-
-// ============================================================
-// 5. FULL SITE INGESTION RUNNER
-// ============================================================
 async function runSiteIngestion(tabId, tabUrl) {
-  console.log("[WebChat] Starting full site ingestion:", tabUrl);
-
   try {
     const res = await fetch("http://localhost:8000/ingest-site", {
       method: "POST",
@@ -171,7 +154,6 @@ async function runSiteIngestion(tabId, tabUrl) {
     });
 
     await readSSEStream(res, (data) => {
-      // Forward progress to React UI
       chrome.tabs.sendMessage(tabId, {
         action: "SITE_INGESTION_PROGRESS",
         status: data.status,
@@ -183,29 +165,29 @@ async function runSiteIngestion(tabId, tabUrl) {
 
       // Fire Chrome notification when site indexing completes
       if (data.status === "ready") {
-        chrome.notifications.create("site-index-complete", {
+        chrome.notifications.create({
           type: "basic",
-          iconUrl: "vite.svg",
+          iconUrl: "vite.svg", // Make sure this exists in your public folder
           title: "WebChat — Indexing Complete",
-          message: data.message ?? "Your site is ready to chat with.",
+          message: data.message ?? "Your site is mapped and ready to chat.",
+          priority: 2
         });
       }
     });
 
   } catch (err) {
-    console.error("[WebChat] Site ingestion error:", err);
     chrome.tabs.sendMessage(tabId, {
       action: "SITE_INGESTION_PROGRESS",
       status: "failed",
-      message: `❌ Connection error: ${err.message}`,
+      message: `Connection error: ${err.message}`,
     }).catch(() => {});
   }
 }
 
+// ============================================================
+// SSE UTILS & CHAT PORT
+// ============================================================
 
-// ============================================================
-// 6. SHARED SSE STREAM READER UTILITY
-// ============================================================
 async function readSSEStream(response, onData) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder("utf-8");
@@ -226,24 +208,16 @@ async function readSSEStream(response, onData) {
           const data = JSON.parse(cleanLine.slice(6));
           onData(data);
         } catch (e) {
-          console.warn("[WebChat] SSE parse error:", e);
+          // ignore parse errors on partial chunks
         }
       }
     }
   }
 }
 
-
-// ============================================================
-// 7. CHAT PORT — TOKEN STREAMING
-// ============================================================
 chrome.runtime.onConnect.addListener((port) => {
-
-  // Keepalive port — just receive pings to stay alive
   if (port.name === "webchat-keepalive") {
-    port.onMessage.addListener(() => {
-      // Receiving the ping is enough — no action needed
-    });
+    port.onMessage.addListener(() => {});
     return;
   }
 
@@ -285,7 +259,7 @@ chrome.runtime.onConnect.addListener((port) => {
               const parsedData = JSON.parse(cleanLine.slice(6));
               port.postMessage(parsedData);
             } catch (e) {
-              console.warn("[WebChat] Token parse error:", e);
+              // ignore parse errors
             }
           }
         }
