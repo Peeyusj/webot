@@ -43,17 +43,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === "DISCOVER_SITE") {
+  // The new direct pipeline
+  if (message.action === "INGEST_FULL_SITE") {
     if (!cachedTabUrl || !cachedTabId) return;
-    runSiteDiscovery(cachedTabId, cachedTabUrl);
-    sendResponse({ ok: true });
-    return true;
-  }
-
-if (message.action === "INGEST_SITE_CONFIRMED") {
-    if (!cachedTabUrl || !cachedTabId) return;
-    // Pass the URLs array from the message into the runner
-    runSiteIngestion(cachedTabId, cachedTabUrl, message.urls); 
+    runSiteIngestion(cachedTabId, cachedTabUrl);
     sendResponse({ ok: true });
     return true;
   }
@@ -63,6 +56,19 @@ if (message.action === "INGEST_SITE_CONFIRMED") {
     runClearCache(cachedTabId, cachedTabUrl);
     sendResponse({ ok: true });
     return true;
+  }
+
+  // Fetch session state for the requesting tab
+  if (message.action === "GET_TAB_STATE") {
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      chrome.storage.session.get([`webchat_state_${tabId}`], (result) => {
+        sendResponse({ state: result[`webchat_state_${tabId}`] });
+      });
+      return true; // Return true to indicate we will send the response asynchronously
+    }
+    sendResponse({ state: null });
+    return false;
   }
 });
 
@@ -79,6 +85,8 @@ async function runClearCache(tabId, tabUrl) {
     });
     
     if (res.ok) {
+      // Clear persisted state too
+      chrome.storage.session.remove([`webchat_state_${tabId}`]);
       chrome.tabs.sendMessage(tabId, { action: "CACHE_CLEARED" }).catch(() => {});
     }
   } catch (err) {
@@ -100,43 +108,31 @@ async function runSinglePageIngestion(tabId, tabUrl, pageData) {
       }),
     });
 
-    await readSSEStream(res, (data) => {
-      chrome.tabs.sendMessage(tabId, {
-        action: "INGESTION_PROGRESS",
-        status: data.status,
-        message: data.message,
-        elapsed: data.elapsed ?? null,
-      }).catch(() => {});
+// when data.status === "ready"
+await readSSEStream(res, (data) => {
+  chrome.tabs.sendMessage(tabId, {
+    action: "INGESTION_PROGRESS",
+    status: data.status,
+    message: data.message,
+    elapsed: data.elapsed ?? null,
+  }).catch(() => {});
+
+  // Persist ready state so sidebar can resume after close
+  if (data.status === "ready") {
+    chrome.storage.session.set({
+      [`webchat_state_${tabId}`]: {
+        mode: "ready",
+        url: tabUrl,
+        indexingTime: data.elapsed ? `Indexed in ${data.elapsed}s` : "Ready"
+      }
     });
+  }
+});
   } catch (err) {
     chrome.tabs.sendMessage(tabId, {
       action: "INGESTION_PROGRESS",
       status: "failed",
       message: `Connection error: ${err.message}`,
-    }).catch(() => {});
-  }
-}
-
-async function runSiteDiscovery(tabId, tabUrl) {
-  try {
-    const res = await fetch("http://localhost:8000/discover-site", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: tabUrl }),
-    });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const result = await res.json();
-
-    chrome.tabs.sendMessage(tabId, {
-      action: "DISCOVER_RESULT",
-      result,
-    }).catch(() => {});
-
-  } catch (err) {
-    chrome.tabs.sendMessage(tabId, {
-      action: "DISCOVER_RESULT",
-      error: `Discovery failed: ${err.message}`,
     }).catch(() => {});
   }
 }
@@ -148,8 +144,7 @@ async function runSiteIngestion(tabId, tabUrl) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tab_id: tabId,
-        url: tabUrl,
-        confirmed: true,
+        url: tabUrl
       }),
     });
 
@@ -163,16 +158,25 @@ async function runSiteIngestion(tabId, tabUrl) {
         time_display: data.time_display ?? null,
       }).catch(() => {});
 
-      // Fire Chrome notification when site indexing completes
+      // Fire Chrome notification when site indexing completes successfully
       if (data.status === "ready") {
-        chrome.notifications.create({
-          type: "basic",
-          iconUrl: "vite.svg", // Make sure this exists in your public folder
-          title: "WebChat — Indexing Complete",
-          message: data.message ?? "Your site is mapped and ready to chat.",
-          priority: 2
-        });
-      }
+  chrome.storage.session.set({
+    [`webchat_state_${tabId}`]: {
+      mode: "ready", 
+      url: tabUrl,
+      indexingTime: data.elapsed ? `Indexed in ${data.elapsed}s` : "Ready",
+      pages_indexed: data.pages_indexed
+    }
+  });
+
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: "vite.svg",
+    title: "WebChat — Ready",
+    message: data.message ?? "The site is mapped and ready.",
+    priority: 2
+  });
+}
     });
 
   } catch (err) {
