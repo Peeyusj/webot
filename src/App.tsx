@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
+import SpaceError from "./components/SpaceError";
+import CubeLoader from "./components/CubeLoader";
+import GeneratingLoader from "./components/GeneratingLoader";
 
 // ============================================================
 // TYPES
@@ -283,7 +286,7 @@ export default function App() {
               {Icons.Chat}
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-slate-900 leading-none tracking-tight">WebChat</h1>
+              <h1 className="text-sm font-semibold text-slate-900 leading-none tracking-tight">BatChat</h1>
               <p className="text-[10px] mt-0.5 leading-none font-medium tracking-wide uppercase">
                 {mode === "processing" && <span className="text-blue-500">Indexing</span>}
                 {mode === "ready" && <span className="text-emerald-500">{indexingTime ?? "Active"}</span>}
@@ -366,127 +369,125 @@ export default function App() {
           )}
 
           {/* PROCESSING */}
-          {mode === "processing" && (
-            <div className="flex flex-col items-center justify-center h-full gap-6 px-6 fade-in">
-              <div className="relative flex items-center justify-center">
-                <div className="absolute w-10 h-10 rounded-full border-2 border-slate-100" />
-                <div className="w-10 h-10 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-              </div>
+{mode === "processing" && (
+  <div className="flex flex-col items-center justify-center h-full gap-2 px-6 fade-in">
+    
+    {/* 3D Cube Animation */}
+    <CubeLoader />
 
-              <p className="text-sm text-slate-500 font-medium text-center max-w-[220px] leading-relaxed">
-                {progressText}
-              </p>
+    {/* Status Text */}
+    <p className="text-sm text-slate-500 font-medium text-center max-w-[220px] leading-relaxed mt-8 mb-6">
+      {progressText}
+    </p>
 
-              <div className="w-full max-w-[270px] bg-slate-50 border border-slate-100 rounded-xl p-4">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-300 mb-2">
-                  Did you know
-                </p>
-                <p className="text-xs text-slate-400 leading-relaxed italic transition-opacity duration-500">
-                  "{FUN_FACTS[factIndex]}"
-                </p>
-              </div>
-            </div>
-          )}
+    {/* Rotating Fun Facts */}
+    <div className="w-full max-w-[270px] bg-slate-50 border border-slate-100 rounded-xl p-4">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-300 mb-2">
+        Did you know
+      </p>
+      <p className="text-xs text-slate-400 leading-relaxed italic transition-opacity duration-500">
+        "{FUN_FACTS[factIndex]}"
+      </p>
+    </div>
+    
+  </div>
+)}
 
           {/* FAILED */}
-          {mode === "failed" && (
-            <div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center fade-in">
-              <div className="w-10 h-10 rounded-full bg-red-50 border border-red-100 flex items-center justify-center">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="15" y1="9" x2="9" y2="15"/>
-                  <line x1="9" y1="9" x2="15" y2="15"/>
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-700">Indexing failed</p>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed max-w-[220px]">
-                  {error ?? "Something went wrong. Please try again."}
-                </p>
-              </div>
-              <button
-                onClick={() => { setMode("choose"); setError(null); }}
-                className="px-4 py-2 text-xs font-semibold text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-all"
-              >
-                Try again
-              </button>
-            </div>
-          )}
+{mode === "failed" && (
+  <SpaceError
+    message={error ?? "We couldn't connect to the server or process the page. Check your network and try again."} 
+    onRetry={() => { 
+      setMode("choose"); 
+      setError(null); 
+    }} 
+  />
+)}
 
-          {/* CHAT */}
-          {mode === "ready" && (
-            <div className="p-4 flex flex-col gap-4 pb-2">
-              {messages.map((msg, index) => (
-                <div
-                  key={index}
-                  className={`flex flex-col gap-1.5 slide-up ${
-                    msg.role === "user" ? "items-end" : "items-start"
-                  }`}
+         {/* CHAT */}
+{mode === "ready" && (
+  <div className="p-4 flex flex-col gap-4 pb-2">
+    {messages.map((msg, index) => {
+      
+      // 1. Hide the empty assistant bubble while waiting for the stream to start
+      if (msg.role === "assistant" && msg.content === "" && isGenerating && index === messages.length - 1) {
+        return null; 
+      }
+
+      return (
+        <div
+          key={index}
+          className={`flex flex-col gap-1.5 slide-up ${
+            msg.role === "user" ? "items-end" : "items-start"
+          }`}
+        >
+          {/* Message bubble */}
+          <div
+            className={`max-w-[87%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-2xl ${
+              msg.role === "user"
+                ? "bg-slate-900 text-white rounded-tr-sm"
+                : "bg-slate-50 border border-slate-100 text-slate-700 rounded-tl-sm"
+            }`}
+            style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+          >
+            {msg.role === "assistant" ? (
+              <div className="prose prose-sm prose-slate max-w-none prose-p:leading-relaxed prose-pre:bg-white prose-pre:border prose-pre:border-slate-200 prose-headings:text-slate-800 prose-strong:text-slate-800 prose-code:text-slate-700">
+                <ReactMarkdown>{msg.content}</ReactMarkdown>
+              </div>
+            ) : (
+              <span>{msg.content}</span>
+            )}
+          </div>
+
+          {/* Source badges */}
+          {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
+            <div className="flex flex-wrap gap-1 pl-0.5 max-w-[87%]">
+              {msg.sources.map((src) => (
+                <span
+                  key={src.id}
+                  className="inline-flex items-center gap-1.5 pl-2 pr-1.5 py-1 bg-white border border-slate-100 rounded-md text-[10px] text-slate-500 shadow-sm"
                 >
-                  {/* Message bubble */}
-                  <div
-                    className={`max-w-[87%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-2xl ${
-                      msg.role === "user"
-                        ? "bg-slate-900 text-white rounded-tr-sm"
-                        : "bg-slate-50 border border-slate-100 text-slate-700 rounded-tl-sm"
-                    }`}
-                    style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+                  <span className="font-bold text-blue-400">[{src.id}]</span>
+                  <span className="truncate max-w-[120px] text-slate-400">{src.title}</span>
+                  <button
+                    onClick={() => handleCopy(src.title, src.id)}
+                    className="ml-0.5 text-slate-200 hover:text-blue-400 transition-colors flex items-center"
+                    title="Copy"
                   >
-                    {msg.content === "" && isGenerating && index === messages.length - 1 ? (
-                      <span className="flex gap-1 items-center py-0.5 px-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </span>
-                    ) : msg.role === "assistant" ? (
-                      <div className="prose prose-sm prose-slate max-w-none prose-p:leading-relaxed prose-pre:bg-white prose-pre:border prose-pre:border-slate-200 prose-headings:text-slate-800 prose-strong:text-slate-800 prose-code:text-slate-700">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                      </div>
+                    {copiedId === src.id ? (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
                     ) : (
-                      <span>{msg.content}</span>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
                     )}
-                  </div>
-
-                  {/* Source badges */}
-                  {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pl-0.5 max-w-[87%]">
-                      {msg.sources.map((src) => (
-                        <span
-                          key={src.id}
-                          className="inline-flex items-center gap-1.5 pl-2 pr-1.5 py-1 bg-white border border-slate-100 rounded-md text-[10px] text-slate-500 shadow-sm"
-                        >
-                          <span className="font-bold text-blue-400">[{src.id}]</span>
-                          <span className="truncate max-w-[120px] text-slate-400">{src.title}</span>
-                          <button
-                            onClick={() => handleCopy(src.title, src.id)}
-                            className="ml-0.5 text-slate-200 hover:text-blue-400 transition-colors flex items-center"
-                            title="Copy"
-                          >
-                            {copiedId === src.id ? (
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12"/>
-                              </svg>
-                            ) : (
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                              </svg>
-                            )}
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Timing */}
-                  {msg.role === "assistant" && msg.timing && (
-                    <p className="text-[10px] text-slate-300 pl-1">{msg.timing}</p>
-                  )}
-                </div>
+                  </button>
+                </span>
               ))}
-              <div ref={messagesEndRef} />
             </div>
           )}
+
+          {/* Timing */}
+          {msg.role === "assistant" && msg.timing && (
+            <p className="text-[10px] text-slate-300 pl-1">{msg.timing}</p>
+          )}
+        </div>
+      );
+    })}
+
+    {/* 2. Show the GeneratingLoader prominently BELOW the chat map */}
+    {isGenerating && messages.length > 0 && messages[messages.length - 1].role === "assistant" && messages[messages.length - 1].content === "" && (
+      <div className="flex w-full items-center justify-center py-4 slide-up">
+        <GeneratingLoader />
+      </div>
+    )}
+
+    <div ref={messagesEndRef} />
+  </div>
+)}
         </div>
 
         {/* ── INPUT ── */}
