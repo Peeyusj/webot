@@ -5,6 +5,76 @@ let cachedPageData = null;
 let cachedTabId = null;
 let cachedTabUrl = null;
 
+const API_BASE = "http://localhost:8000";
+
+// ============================================================
+// BRING-YOUR-OWN-KEY (BYOK)
+// The user's AI API key lives in chrome.storage.local, which is
+// sandboxed to the extension and not readable by web pages. We
+// read it here and attach it per-request as headers — it is sent
+// straight to our backend and never written to the page or disk.
+// ============================================================
+async function getRequestHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  try {
+    const { webchat_settings } = await chrome.storage.local.get("webchat_settings");
+    if (webchat_settings && webchat_settings.apiKey) {
+      headers["X-Provider"] = webchat_settings.provider || "groq";
+      headers["X-Api-Key"] = webchat_settings.apiKey;
+      if (webchat_settings.model) headers["X-Model"] = webchat_settings.model;
+    }
+  } catch (err) {
+    console.warn("[WebChat] Could not read settings:", err);
+  }
+  return headers;
+}
+
+// Verify a key against the backend without persisting anything.
+async function validateKey(settings) {
+  try {
+    const res = await fetch(`${API_BASE}/validate-key`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Provider": settings.provider || "groq",
+        "X-Api-Key": settings.apiKey || "",
+        ...(settings.model ? { "X-Model": settings.model } : {}),
+      },
+    });
+    if (res.status === 404) {
+      return {
+        valid: false,
+        detail: "Backend has no /validate-key route — restart the server with the latest code.",
+      };
+    }
+    if (!res.ok) {
+      return { valid: false, detail: `Server returned ${res.status}.` };
+    }
+    return await res.json();
+  } catch (err) {
+    return {
+      valid: false,
+      detail: `Could not reach the backend at ${API_BASE}. Is it running?`,
+    };
+  }
+}
+
+// Ask the backend for one starter question based on the indexed content.
+async function getSuggestion(url) {
+  if (!url) return { question: "" };
+  try {
+    const res = await fetch(`${API_BASE}/suggest-question`, {
+      method: "POST",
+      headers: await getRequestHeaders(),
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) return { question: "" };
+    return await res.json();
+  } catch (err) {
+    return { question: "" };
+  }
+}
+
 // ============================================================
 // 1. ICON CLICK — TOGGLE UI + CACHE PAGE DATA
 // ============================================================
@@ -58,6 +128,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Settings UI asks us to test a key against the backend.
+  if (message.action === "VALIDATE_KEY") {
+    validateKey(message.settings || {}).then(sendResponse);
+    return true; // async response
+  }
+
+  // Sidebar asks for a starter question once content is indexed.
+  if (message.action === "GET_SUGGESTION") {
+    const url = sender.tab?.url || cachedTabUrl;
+    getSuggestion(url).then(sendResponse);
+    return true; // async response
+  }
+
   // Fetch session state for the requesting tab
   if (message.action === "GET_TAB_STATE") {
     const tabId = sender.tab?.id;
@@ -78,9 +161,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function runClearCache(tabId, tabUrl) {
   try {
-    const res = await fetch("http://localhost:8000/clear-cache", {
+    const res = await fetch(`${API_BASE}/clear-cache`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await getRequestHeaders(),
       body: JSON.stringify({ url: tabUrl, clear_all: false }),
     });
     
@@ -96,9 +179,9 @@ async function runClearCache(tabId, tabUrl) {
 
 async function runSinglePageIngestion(tabId, tabUrl, pageData) {
   try {
-    const res = await fetch("http://localhost:8000/ingest-page", {
+    const res = await fetch(`${API_BASE}/ingest-page`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await getRequestHeaders(),
       body: JSON.stringify({
         tab_id: tabId,
         url: tabUrl,
@@ -139,9 +222,9 @@ await readSSEStream(res, (data) => {
 
 async function runSiteIngestion(tabId, tabUrl) {
   try {
-    const res = await fetch("http://localhost:8000/ingest-site", {
+    const res = await fetch(`${API_BASE}/ingest-site`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await getRequestHeaders(),
       body: JSON.stringify({
         tab_id: tabId,
         url: tabUrl
@@ -233,9 +316,9 @@ chrome.runtime.onConnect.addListener((port) => {
     if (!tabId || !tabUrl) return;
 
     try {
-      const response = await fetch("http://localhost:8000/ask-stream", {
+      const response = await fetch(`${API_BASE}/ask-stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await getRequestHeaders(),
         body: JSON.stringify({
           tab_id: tabId,
           url: tabUrl,
@@ -243,6 +326,18 @@ chrome.runtime.onConnect.addListener((port) => {
           history: msg.history,
         }),
       });
+
+      // Surface auth/server errors (e.g. 401 = no key configured)
+      // instead of silently streaming an empty body.
+      if (!response.ok) {
+        let detail = `Request failed (${response.status})`;
+        try {
+          const errJson = await response.json();
+          if (errJson && errJson.detail) detail = errJson.detail;
+        } catch (_) { /* body wasn't JSON */ }
+        port.postMessage({ type: "ERROR", error: detail });
+        return;
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");

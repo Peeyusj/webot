@@ -3,6 +3,8 @@ import ReactMarkdown from "react-markdown";
 import SpaceError from "./components/SpaceError";
 import CubeLoader from "./components/CubeLoader";
 import GeneratingLoader from "./components/GeneratingLoader";
+import SettingsPanel from "./components/SettingsPanel";
+import { type AISettings, DEFAULT_SETTINGS } from "./components/SettingsPanel/presets";
 
 // ============================================================
 // TYPES
@@ -33,6 +35,16 @@ export default function App() {
   const [isClearing, setIsClearing] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [factIndex, setFactIndex] = useState(0);
+
+  // BYOK settings (provider + API key + optional model)
+  const [settings, setSettings] = useState<AISettings>(DEFAULT_SETTINGS);
+  const [showSettings, setShowSettings] = useState(false);
+  const hasKey = settings.apiKey.trim().length > 0;
+
+  // Typewriter starter-question hint shown inside the input box
+  const [suggestion, setSuggestion] = useState("");
+  const [typedSuggestion, setTypedSuggestion] = useState("");
+  const [suggestionActive, setSuggestionActive] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +77,77 @@ export default function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ============================================================
+  // LOAD BYOK SETTINGS FROM EXTENSION STORAGE
+  // chrome.storage.local is sandboxed to the extension, so the
+  // key never touches the host page's localStorage / DOM.
+  // ============================================================
+  useEffect(() => {
+    chrome.storage?.local.get("webchat_settings", (res) => {
+      if (res && res.webchat_settings) {
+        setSettings({ ...DEFAULT_SETTINGS, ...res.webchat_settings });
+      }
+    });
+  }, []);
+
+  const handleSaveSettings = (next: AISettings) => {
+    setSettings(next);
+    chrome.storage?.local.set({ webchat_settings: next });
+    setShowSettings(false);
+    setError(null);
+  };
+
+  const handleRemoveSettings = () => {
+    const cleared = { ...DEFAULT_SETTINGS };
+    setSettings(cleared);
+    chrome.storage?.local.remove("webchat_settings");
+    setShowSettings(false);
+  };
+
+  // ============================================================
+  // STARTER QUESTION — fetch one suggestion once content is ready
+  // (works for both single-page and full-site scopes)
+  // ============================================================
+  useEffect(() => {
+    if (mode !== "ready") {
+      setSuggestion("");
+      setTypedSuggestion("");
+      setSuggestionActive(false);
+      return;
+    }
+    chrome.runtime.sendMessage({ action: "GET_SUGGESTION" }, (res) => {
+      if (chrome.runtime.lastError) return;
+      const q = (res && res.question ? String(res.question) : "").trim();
+      if (q) {
+        setSuggestion(q);
+        setTypedSuggestion("");
+        setSuggestionActive(true);
+      }
+    });
+  }, [mode]);
+
+  // Typewriter: reveal the suggestion one character at a time.
+  useEffect(() => {
+    if (!suggestionActive || !suggestion) return;
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setTypedSuggestion(suggestion.slice(0, i));
+      if (i >= suggestion.length) clearInterval(id);
+    }, 45);
+    return () => clearInterval(id);
+  }, [suggestion, suggestionActive]);
+
+  // User engaged with the input — freeze the typewriter.
+  const dismissSuggestionAnimation = () => setSuggestionActive(false);
+
+  // Once a question is sent, retire the hint for good.
+  const clearSuggestion = () => {
+    setSuggestion("");
+    setTypedSuggestion("");
+    setSuggestionActive(false);
+  };
 
   // ============================================================
   // ROTATE FUN FACTS WHILE PROCESSING
@@ -169,6 +252,7 @@ export default function App() {
 
     setError(null);
     setIsGenerating(true);
+    clearSuggestion();
 
     const userQuery = inputText.trim();
     setInputText("");
@@ -253,6 +337,12 @@ export default function App() {
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
     ),
+    Settings: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    ),
   };
 
   // ============================================================
@@ -277,7 +367,7 @@ export default function App() {
         .prose code { font-size: 11px !important; }
       `}</style>
 
-      <div className="flex flex-col h-screen font-sans bg-white text-slate-900 select-none">
+      <div className="relative flex flex-col h-screen font-sans bg-white text-slate-900 select-none">
 
         {/* ── HEADER ── */}
         <header className="px-4 py-3 border-b border-slate-100 bg-white flex justify-between items-center shrink-0">
@@ -297,6 +387,20 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              className={`relative w-7 h-7 flex items-center justify-center rounded-lg transition-all ${
+                hasKey
+                  ? "text-slate-300 hover:text-slate-700 hover:bg-slate-100"
+                  : "text-blue-500 hover:bg-blue-50"
+              }`}
+            >
+              {Icons.Settings}
+              {!hasKey && (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500 ring-2 ring-white" />
+              )}
+            </button>
             {(mode === "ready" || mode === "failed") && (
               <button
                 onClick={handleClearCache}
@@ -324,6 +428,28 @@ export default function App() {
           {/* CHOOSE */}
           {mode === "choose" && (
             <div className="flex flex-col justify-center h-full px-5 gap-4 fade-in">
+              {!hasKey && (
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="group flex items-start gap-3 p-3.5 rounded-xl border border-blue-100 bg-blue-50/50 hover:bg-blue-50 transition-all text-left"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-white border border-blue-100 flex items-center justify-center shrink-0 text-blue-500 mt-0.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-blue-700 leading-tight">
+                      Add your AI API key
+                    </p>
+                    <p className="text-[11px] text-blue-500/80 mt-0.5 leading-relaxed">
+                      Connect Groq, OpenAI, or OpenRouter to start chatting. Tap to open settings.
+                    </p>
+                  </div>
+                </button>
+              )}
+
               <div>
                 <p className="text-[10px] font-semibold text-slate-300 uppercase tracking-widest mb-3">
                   Select scope
@@ -490,6 +616,26 @@ export default function App() {
 )}
         </div>
 
+        {/* ── INLINE ERROR (ready mode) ── */}
+        {mode === "ready" && error && (
+          <div className="px-3 pt-2 shrink-0 fade-in">
+            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <p className="text-[11px] text-red-500 leading-relaxed break-words flex-1">{error}</p>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="text-[11px] font-semibold text-red-500 hover:text-red-600 underline shrink-0"
+              >
+                Settings
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── INPUT ── */}
         {mode === "ready" && (
           <form
@@ -500,7 +646,14 @@ export default function App() {
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Ask anything..."
+              onFocus={dismissSuggestionAnimation}
+              placeholder={
+                !inputText && typedSuggestion
+                  ? suggestionActive
+                    ? `${typedSuggestion}▌`
+                    : typedSuggestion
+                  : "Ask anything..."
+              }
               disabled={isGenerating}
               className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-3.5 py-2.5 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-300 disabled:opacity-50 transition-all"
             />
@@ -512,6 +665,16 @@ export default function App() {
               {Icons.Send}
             </button>
           </form>
+        )}
+
+        {/* ── SETTINGS OVERLAY ── */}
+        {showSettings && (
+          <SettingsPanel
+            initialSettings={settings}
+            onSave={handleSaveSettings}
+            onRemove={handleRemoveSettings}
+            onClose={() => setShowSettings(false)}
+          />
         )}
       </div>
     </>
