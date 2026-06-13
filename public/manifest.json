@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "WebChat - Talk to any webpage",
+  "name": "BatChat - Talk to any webpage",
   "version": "1.0.0",
   "description": "Turn any documentation or article into an interactive AI assistant.",
   "permissions": ["activeTab", "scripting", "storage", "notifications"],
@@ -9,9 +9,27 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "action": {
-    "default_title": "Toggle WebChat"
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   },
+  "action": {
+    "default_title": "Toggle BatChat",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["primaryChat.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

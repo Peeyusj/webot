@@ -4,8 +4,10 @@ import SpaceError from "./components/SpaceError";
 import CubeLoader from "./components/CubeLoader";
 import GeneratingLoader from "./components/GeneratingLoader";
 import SettingsPanel from "./components/SettingsPanel";
-import { type AISettings, DEFAULT_SETTINGS } from "./components/SettingsPanel/presets";
-
+import {
+  type AISettings,
+  DEFAULT_SETTINGS,
+} from "./components/SettingsPanel/presets";
 // ============================================================
 // TYPES
 // ============================================================
@@ -68,7 +70,7 @@ export default function App() {
     "The first virus, 'Creeper' (1971), was harmless. It just printed: 'I'm the creeper, catch me if you can!'",
     "Email is actually older than the World Wide Web, first sent in 1971 by Ray Tomlinson.",
     "The Firefox logo is not actually a fox — it's a red panda.",
-    "For 8 years, the password for the U.S. nuclear missile control computers was '00000000'."
+    "For 8 years, the password for the U.S. nuclear missile control computers was '00000000'.",
   ];
 
   // ============================================================
@@ -80,8 +82,6 @@ export default function App() {
 
   // ============================================================
   // LOAD BYOK SETTINGS FROM EXTENSION STORAGE
-  // chrome.storage.local is sandboxed to the extension, so the
-  // key never touches the host page's localStorage / DOM.
   // ============================================================
   useEffect(() => {
     chrome.storage?.local.get("webchat_settings", (res) => {
@@ -106,8 +106,7 @@ export default function App() {
   };
 
   // ============================================================
-  // STARTER QUESTION — fetch one suggestion once content is ready
-  // (works for both single-page and full-site scopes)
+  // STARTER QUESTION
   // ============================================================
   useEffect(() => {
     if (mode !== "ready") {
@@ -127,7 +126,6 @@ export default function App() {
     });
   }, [mode]);
 
-  // Typewriter: reveal the suggestion one character at a time.
   useEffect(() => {
     if (!suggestionActive || !suggestion) return;
     let i = 0;
@@ -139,10 +137,7 @@ export default function App() {
     return () => clearInterval(id);
   }, [suggestion, suggestionActive]);
 
-  // User engaged with the input — freeze the typewriter.
   const dismissSuggestionAnimation = () => setSuggestionActive(false);
-
-  // Once a question is sent, retire the hint for good.
   const clearSuggestion = () => {
     setSuggestion("");
     setTypedSuggestion("");
@@ -163,38 +158,45 @@ export default function App() {
 
   // ============================================================
   // SESSION RESUME ON MOUNT
-  // Ask background.js for the state tied to this specific tab
   // ============================================================
   useEffect(() => {
     chrome.runtime.sendMessage({ action: "GET_TAB_STATE" }, (response) => {
-      // Explicitly check if we got a valid response and state back
       if (response && response.state && response.state.mode === "ready") {
         setMode("ready");
         setIndexingTime(response.state.indexingTime ?? "Ready");
-        setMessages([{
-          role: "assistant",
-          content: "Welcome back! The content is still indexed. What would you like to know?"
-        }]);
+        setMessages([
+          {
+            role: "assistant",
+            content:
+              "Welcome back! The content is still indexed. What would you like to know?",
+          },
+        ]);
       }
     });
-  }, []); // Runs once on mount
+  }, []);
+
   // ============================================================
   // BACKGROUND MESSAGE LISTENER
   // ============================================================
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const messageListener = (request: any) => {
-      if (request.action === "INGESTION_PROGRESS" || request.action === "SITE_INGESTION_PROGRESS") {
+      if (
+        request.action === "INGESTION_PROGRESS" ||
+        request.action === "SITE_INGESTION_PROGRESS"
+      ) {
         setProgressText(request.message);
 
         if (request.status === "ready") {
           setMode("ready");
-          if (request.elapsed) setIndexingTime(`Indexed in ${request.elapsed}s`);
+          if (request.elapsed)
+            setIndexingTime(`Indexed in ${request.elapsed}s`);
 
           if (messages.length === 0) {
-            const botMessage = request.action === "SITE_INGESTION_PROGRESS"
-              ? `I've mapped this site section. What would you like to know?`
-              : "I've indexed this page. What would you like to know?";
+            const botMessage =
+              request.action === "SITE_INGESTION_PROGRESS"
+                ? `I've mapped this site section. What would you like to know?`
+                : "I've indexed this page. What would you like to know?";
             setMessages([{ role: "assistant", content: botMessage }]);
           }
         }
@@ -257,7 +259,6 @@ export default function App() {
     const userQuery = inputText.trim();
     setInputText("");
 
-    // Capture history before mutations
     const historyToSend = messages.slice(-6);
 
     setMessages((prev) => [
@@ -274,7 +275,8 @@ export default function App() {
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
-          if (last && last.role === "assistant") last.sources = response.sources;
+          if (last && last.role === "assistant")
+            last.sources = response.sources;
           return updated;
         });
       }
@@ -306,41 +308,95 @@ export default function App() {
   // ============================================================
   const Icons = {
     Document: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
       </svg>
     ),
     Globe: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="2" y1="12" x2="22" y2="12"/>
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="2" y1="12" x2="22" y2="12" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
       </svg>
     ),
     Trash: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="3 6 5 6 21 6"/>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
       </svg>
     ),
     Send: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="22" y1="2" x2="11" y2="13"/>
-        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
       </svg>
     ),
     Chat: (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     ),
     Settings: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
     ),
   };
@@ -351,14 +407,14 @@ export default function App() {
   return (
     <>
       <style>{`
-        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .fade-in { animation: fadeIn 0.2s ease-out; }
         .slide-up { animation: slideUp 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .prose pre { font-size: 11px !important; line-height: 1.5 !important; }
         .prose p { margin: 0.35em 0 !important; }
         .prose ul, .prose ol { margin: 0.35em 0 !important; padding-left: 1.2em !important; }
@@ -367,38 +423,53 @@ export default function App() {
         .prose code { font-size: 11px !important; }
       `}</style>
 
-      <div className="relative flex flex-col h-screen font-sans bg-white text-slate-900 select-none">
-
+      <div className="relative flex flex-col h-screen font-sans bg-slate-50 text-slate-900 select-none">
         {/* ── HEADER ── */}
-        <header className="px-4 py-3 border-b border-slate-100 bg-white flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center shrink-0">
-              {Icons.Chat}
+        <header className="px-4 py-3 border-b border-slate-200 bg-white flex justify-between items-center shrink-0 shadow-sm z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 shadow-md shadow-blue-500/20 flex items-center justify-center shrink-0">
+              <img
+                src={chrome.runtime.getURL("primaryChat.svg")}
+                alt="Chat Logo"
+                className="w-7.5 h-7.5 object-contain"
+              />
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-slate-900 leading-none tracking-tight">BatChat</h1>
-              <p className="text-[10px] mt-0.5 leading-none font-medium tracking-wide uppercase">
-                {mode === "processing" && <span className="text-blue-500">Indexing</span>}
-                {mode === "ready" && <span className="text-emerald-500">{indexingTime ?? "Active"}</span>}
-                {mode === "choose" && <span className="text-slate-300">Standby</span>}
-                {mode === "failed" && <span className="text-red-400">Error</span>}
+              <h1 className="text-sm font-bold text-slate-800 leading-none tracking-tight">
+                BatChat
+              </h1>
+              <p className="text-[10px] mt-1.5 leading-none font-bold tracking-widest uppercase">
+                {mode === "processing" && (
+                  <span className="text-blue-500">Indexing</span>
+                )}
+                {mode === "ready" && (
+                  <span className="text-emerald-500">
+                    {indexingTime ?? "Active"}
+                  </span>
+                )}
+                {mode === "choose" && (
+                  <span className="text-slate-400">Standby</span>
+                )}
+                {mode === "failed" && (
+                  <span className="text-red-500">Error</span>
+                )}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setShowSettings(true)}
               title="Settings"
-              className={`relative w-7 h-7 flex items-center justify-center rounded-lg transition-all ${
+              className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
                 hasKey
-                  ? "text-slate-300 hover:text-slate-700 hover:bg-slate-100"
-                  : "text-blue-500 hover:bg-blue-50"
+                  ? "text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                  : "text-blue-600 bg-blue-50 hover:bg-blue-100"
               }`}
             >
               {Icons.Settings}
               {!hasKey && (
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500 ring-2 ring-white" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white" />
               )}
             </button>
             {(mode === "ready" || mode === "failed") && (
@@ -406,15 +477,19 @@ export default function App() {
                 onClick={handleClearCache}
                 disabled={isClearing}
                 title="Clear memory"
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
               >
                 {Icons.Trash}
               </button>
             )}
             {mode === "ready" && (
               <button
-                onClick={() => { setMode("choose"); setMessages([]); setIndexingTime(null); }}
-                className="h-7 px-2.5 text-[11px] font-semibold text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all"
+                onClick={() => {
+                  setMode("choose");
+                  setMessages([]);
+                  setIndexingTime(null);
+                }}
+                className="h-8 px-3 ml-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded-lg transition-all"
               >
                 Back
               </button>
@@ -423,69 +498,80 @@ export default function App() {
         </header>
 
         {/* ── BODY ── */}
-        <div className="flex-1 overflow-y-auto">
-
+        <div className="flex-1 overflow-y-auto bg-slate-50">
           {/* CHOOSE */}
           {mode === "choose" && (
-            <div className="flex flex-col justify-center h-full px-5 gap-4 fade-in">
+            <div className="flex flex-col justify-center h-full px-5 gap-5 fade-in">
               {!hasKey && (
                 <button
                   onClick={() => setShowSettings(true)}
-                  className="group flex items-start gap-3 p-3.5 rounded-xl border border-blue-100 bg-blue-50/50 hover:bg-blue-50 transition-all text-left"
+                  className="group flex items-start gap-3.5 p-4 rounded-xl border border-blue-200 bg-white shadow-sm hover:shadow-md hover:border-blue-300 transition-all text-left"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-white border border-blue-100 flex items-center justify-center shrink-0 text-blue-500 mt-0.5">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-blue-600 mt-0.5 group-hover:bg-blue-100 transition-colors">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
                   </div>
                   <div>
-                    <p className="text-[13px] font-semibold text-blue-700 leading-tight">
+                    <p className="text-[13px] font-bold text-slate-800 leading-tight group-hover:text-blue-700 transition-colors">
                       Add your AI API key
                     </p>
-                    <p className="text-[11px] text-blue-500/80 mt-0.5 leading-relaxed">
-                      Connect Groq, OpenAI, or OpenRouter to start chatting. Tap to open settings.
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      Connect Groq, OpenAI, or OpenRouter to start chatting. Tap
+                      to configure.
                     </p>
                   </div>
                 </button>
               )}
 
               <div>
-                <p className="text-[10px] font-semibold text-slate-300 uppercase tracking-widest mb-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 pl-1">
                   Select scope
                 </p>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                   <button
                     onClick={handleChooseSinglePage}
-                    className="group flex items-start gap-3 p-4 rounded-xl border border-slate-100 bg-white hover:border-blue-200 hover:bg-blue-50/30 transition-all text-left"
+                    className="group flex items-start gap-3.5 p-4 rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-blue-300 transition-all text-left"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-blue-500 group-hover:bg-blue-100 transition-colors mt-0.5">
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-blue-600 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 shadow-sm transition-all mt-0.5">
                       {Icons.Document}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-slate-700 group-hover:text-blue-700 transition-colors leading-tight">
+                      <p className="text-sm font-bold text-slate-800 group-hover:text-blue-700 transition-colors leading-tight">
                         This page
                       </p>
-                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        Chat with just the current document. Works on authenticated and private pages.
+                      <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                        Chat with just the current document. Works on
+                        authenticated and private pages.
                       </p>
                     </div>
                   </button>
 
                   <button
                     onClick={handleChooseFullSite}
-                    className="group flex items-start gap-3 p-4 rounded-xl border border-slate-100 bg-white hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left"
+                    className="group flex items-start gap-3.5 p-4 rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-indigo-300 transition-all text-left"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 text-indigo-500 group-hover:bg-indigo-100 transition-colors mt-0.5">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 shadow-sm transition-all mt-0.5">
                       {Icons.Globe}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-slate-700 group-hover:text-indigo-700 transition-colors leading-tight">
+                      <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700 transition-colors leading-tight">
                         Entire site section
                       </p>
-                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        Index all pages under this URL path. Best for documentation sites.
+                      <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                        Index all pages under this URL path. Best for robust
+                        documentation sites.
                       </p>
                     </div>
                   </button>
@@ -495,140 +581,186 @@ export default function App() {
           )}
 
           {/* PROCESSING */}
-{mode === "processing" && (
-  <div className="flex flex-col items-center justify-center h-full gap-2 px-6 fade-in">
-    
-    {/* 3D Cube Animation */}
-    <CubeLoader />
-
-    {/* Status Text */}
-    <p className="text-sm text-slate-500 font-medium text-center max-w-[220px] leading-relaxed mt-8 mb-6">
-      {progressText}
-    </p>
-
-    {/* Rotating Fun Facts */}
-    <div className="w-full max-w-[270px] bg-slate-50 border border-slate-100 rounded-xl p-4">
-      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-300 mb-2">
-        Did you know
-      </p>
-      <p className="text-xs text-slate-400 leading-relaxed italic transition-opacity duration-500">
-        "{FUN_FACTS[factIndex]}"
-      </p>
-    </div>
-    
-  </div>
-)}
-
-          {/* FAILED */}
-{mode === "failed" && (
-  <SpaceError
-    message={error ?? "We couldn't connect to the server or process the page. Check your network and try again."} 
-    onRetry={() => { 
-      setMode("choose"); 
-      setError(null); 
-    }} 
-  />
-)}
-
-         {/* CHAT */}
-{mode === "ready" && (
-  <div className="p-4 flex flex-col gap-4 pb-2">
-    {messages.map((msg, index) => {
-      
-      // 1. Hide the empty assistant bubble while waiting for the stream to start
-      if (msg.role === "assistant" && msg.content === "" && isGenerating && index === messages.length - 1) {
-        return null; 
-      }
-
-      return (
-        <div
-          key={index}
-          className={`flex flex-col gap-1.5 slide-up ${
-            msg.role === "user" ? "items-end" : "items-start"
-          }`}
-        >
-          {/* Message bubble */}
-          <div
-            className={`max-w-[87%] px-3.5 py-2.5 text-[13px] leading-relaxed rounded-2xl ${
-              msg.role === "user"
-                ? "bg-slate-900 text-white rounded-tr-sm"
-                : "bg-slate-50 border border-slate-100 text-slate-700 rounded-tl-sm"
-            }`}
-            style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
-          >
-            {msg.role === "assistant" ? (
-              <div className="prose prose-sm prose-slate max-w-none prose-p:leading-relaxed prose-pre:bg-white prose-pre:border prose-pre:border-slate-200 prose-headings:text-slate-800 prose-strong:text-slate-800 prose-code:text-slate-700">
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+          {mode === "processing" && (
+            <div className="flex flex-col items-center justify-center h-full gap-2 px-6 fade-in">
+              <CubeLoader />
+              <p className="text-sm text-slate-700 font-semibold text-center max-w-[220px] leading-relaxed mt-8 mb-6">
+                {progressText}
+              </p>
+              <div className="w-full max-w-[270px] bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                  Did you know
+                </p>
+                <p className="text-xs text-slate-600 leading-relaxed italic transition-opacity duration-500 font-medium">
+                  "{FUN_FACTS[factIndex]}"
+                </p>
               </div>
-            ) : (
-              <span>{msg.content}</span>
-            )}
-          </div>
-
-          {/* Source badges */}
-          {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
-            <div className="flex flex-wrap gap-1 pl-0.5 max-w-[87%]">
-              {msg.sources.map((src) => (
-                <span
-                  key={src.id}
-                  className="inline-flex items-center gap-1.5 pl-2 pr-1.5 py-1 bg-white border border-slate-100 rounded-md text-[10px] text-slate-500 shadow-sm"
-                >
-                  <span className="font-bold text-blue-400">[{src.id}]</span>
-                  <span className="truncate max-w-[120px] text-slate-400">{src.title}</span>
-                  <button
-                    onClick={() => handleCopy(src.title, src.id)}
-                    className="ml-0.5 text-slate-200 hover:text-blue-400 transition-colors flex items-center"
-                    title="Copy"
-                  >
-                    {copiedId === src.id ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    ) : (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                      </svg>
-                    )}
-                  </button>
-                </span>
-              ))}
             </div>
           )}
 
-          {/* Timing */}
-          {msg.role === "assistant" && msg.timing && (
-            <p className="text-[10px] text-slate-300 pl-1">{msg.timing}</p>
+          {/* FAILED */}
+          {mode === "failed" && (
+            <SpaceError
+              message={
+                error ??
+                "We couldn't connect to the server or process the page. Check your network and try again."
+              }
+              onRetry={() => {
+                setMode("choose");
+                setError(null);
+              }}
+            />
           )}
-        </div>
-      );
-    })}
 
-    {/* 2. Show the GeneratingLoader prominently BELOW the chat map */}
-    {isGenerating && messages.length > 0 && messages[messages.length - 1].role === "assistant" && messages[messages.length - 1].content === "" && (
-      <div className="flex w-full items-center justify-center py-4 slide-up">
-        <GeneratingLoader />
-      </div>
-    )}
+          {/* CHAT */}
+          {mode === "ready" && (
+            <div className="p-4 flex flex-col gap-5 pb-4">
+              {messages.map((msg, index) => {
+                if (
+                  msg.role === "assistant" &&
+                  msg.content === "" &&
+                  isGenerating &&
+                  index === messages.length - 1
+                ) {
+                  return null;
+                }
 
-    <div ref={messagesEndRef} />
-  </div>
-)}
+                return (
+                  <div
+                    key={index}
+                    className={`flex flex-col gap-2 slide-up ${
+                      msg.role === "user" ? "items-end" : "items-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[88%] px-4 py-3 text-[13px] leading-relaxed rounded-2xl shadow-sm ${
+                        msg.role === "user"
+                          ? "bg-slate-800 text-white rounded-tr-sm"
+                          : "bg-white border border-slate-200 text-slate-800 rounded-tl-sm"
+                      }`}
+                      style={{
+                        wordBreak: "break-word",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {msg.role === "assistant" ? (
+                        <div className="prose prose-sm prose-slate max-w-none prose-p:leading-relaxed prose-pre:bg-slate-50 prose-pre:border prose-pre:border-slate-200 prose-headings:text-slate-900 prose-strong:text-slate-900 prose-code:text-slate-800">
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        <span className="font-medium">{msg.content}</span>
+                      )}
+                    </div>
+
+                    {msg.role === "assistant" &&
+                      msg.sources &&
+                      msg.sources.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pl-1 max-w-[88%]">
+                          {msg.sources.map((src) => (
+                            <span
+                              key={src.id}
+                              className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 bg-white border border-slate-200 shadow-sm rounded-md text-[10px] text-slate-600 font-medium"
+                            >
+                              <span className="font-bold text-blue-500">
+                                [{src.id}]
+                              </span>
+                              <span className="truncate max-w-[120px]">
+                                {src.title}
+                              </span>
+                              <button
+                                onClick={() => handleCopy(src.title, src.id)}
+                                className="ml-0.5 text-slate-300 hover:text-blue-500 transition-colors flex items-center"
+                                title="Copy"
+                              >
+                                {copiedId === src.id ? (
+                                  <svg
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="#10b981"
+                                    strokeWidth="3"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <rect
+                                      x="9"
+                                      y="9"
+                                      width="13"
+                                      height="13"
+                                      rx="2"
+                                      ry="2"
+                                    />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                  </svg>
+                                )}
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                    {msg.role === "assistant" && msg.timing && (
+                      <p className="text-[10px] text-slate-400 pl-1.5 font-medium">
+                        {msg.timing}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+
+              {isGenerating &&
+                messages.length > 0 &&
+                messages[messages.length - 1].role === "assistant" &&
+                messages[messages.length - 1].content === "" && (
+                  <div className="flex w-full items-center justify-center py-5 slide-up">
+                    <GeneratingLoader />
+                  </div>
+                )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          )}
         </div>
 
         {/* ── INLINE ERROR (ready mode) ── */}
         {mode === "ready" && error && (
-          <div className="px-3 pt-2 shrink-0 fade-in">
-            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
+          <div className="px-4 pt-3 shrink-0 fade-in bg-white border-t border-slate-200">
+            <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-red-50 border border-red-200 shadow-sm">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#ef4444"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mt-0.5 shrink-0"
+              >
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              <p className="text-[11px] text-red-500 leading-relaxed break-words flex-1">{error}</p>
+              <p className="text-[12px] font-medium text-red-700 leading-relaxed break-words flex-1">
+                {error}
+              </p>
               <button
                 onClick={() => setShowSettings(true)}
-                className="text-[11px] font-semibold text-red-500 hover:text-red-600 underline shrink-0"
+                className="text-[12px] font-bold text-red-600 hover:text-red-800 underline shrink-0"
               >
                 Settings
               </button>
@@ -640,7 +772,7 @@ export default function App() {
         {mode === "ready" && (
           <form
             onSubmit={handleSendMessage}
-            className="px-3 py-3 border-t border-slate-100 bg-white flex gap-2 shrink-0"
+            className="px-4 py-3 border-t border-slate-200 bg-white flex gap-2.5 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)] z-10"
           >
             <input
               type="text"
@@ -655,12 +787,12 @@ export default function App() {
                   : "Ask anything..."
               }
               disabled={isGenerating}
-              className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-3.5 py-2.5 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-300 disabled:opacity-50 transition-all"
+              className="flex-1 bg-white border border-slate-200 shadow-sm rounded-xl px-4 py-3 text-[13px] font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 disabled:opacity-50 transition-all"
             />
             <button
               type="submit"
               disabled={!inputText.trim() || isGenerating}
-              className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl transition-all shrink-0"
+              className="w-11 h-11 flex items-center justify-center bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20 disabled:shadow-none disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed text-white rounded-xl transition-all shrink-0"
             >
               {Icons.Send}
             </button>
